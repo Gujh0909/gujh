@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AdaptAssess · AI Question Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --glass-bg: rgba(255,255,255,0.08);
+    --glass-border: rgba(255,255,255,0.22);
+    --glass-shadow: rgba(0,0,0,0.25);
+    --glass-shine: rgba(255,255,255,0.35);
+    --accent-a: #a78bfa;
+    --accent-b: #38bdf8;
+    --accent-c: #fb7185;
+    --accent-correct: #4ade80;
+    --accent-wrong: #f87171;
+    --text-primary: rgba(255,255,255,0.95);
+    --text-muted: rgba(255,255,255,0.55);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    font-family: 'Sora', sans-serif;
+    color: var(--text-primary);
+    background: #07060f;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* === ANIMATED BACKGROUND === */
+  .bg-canvas {
+    position: fixed; inset: 0; z-index: 0; overflow: hidden;
+  }
+  .orb {
+    position: absolute; border-radius: 50%;
+    filter: blur(80px); opacity: 0.5; animation: drift 18s infinite ease-in-out;
+  }
+  .orb-1 { width: 600px; height: 600px; background: radial-gradient(circle, #6d28d9, transparent 70%); top: -120px; left: -100px; animation-delay: 0s; }
+  .orb-2 { width: 500px; height: 500px; background: radial-gradient(circle, #0c4a6e, transparent 70%); bottom: -80px; right: -80px; animation-delay: -6s; }
+  .orb-3 { width: 350px; height: 350px; background: radial-gradient(circle, #be185d, transparent 70%); top: 40%; left: 55%; animation-delay: -12s; }
+  .orb-4 { width: 280px; height: 280px; background: radial-gradient(circle, #065f46, transparent 70%); top: 60%; left: 10%; animation-delay: -4s; }
+
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(40px, -30px) scale(1.05); }
+    66% { transform: translate(-20px, 50px) scale(0.95); }
+  }
+
+  /* Grid overlay */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* === LAYOUT === */
+  .app {
+    position: relative; z-index: 1;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 40px 20px 60px;
+  }
+
+  /* === HEADER === */
+  header {
+    text-align: center; margin-bottom: 44px;
+    animation: fadeDown 0.7s ease both;
+  }
+  .logo-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 100px;
+    padding: 6px 18px; margin-bottom: 20px;
+    backdrop-filter: blur(16px);
+    font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent-a);
+  }
+  .logo-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-a); animation: pulse 2s infinite; }
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2rem, 5vw, 3.2rem);
+    font-weight: 400;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #fff 0%, var(--accent-a) 50%, var(--accent-b) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .subtitle { margin-top: 10px; font-size: 14px; color: var(--text-muted); letter-spacing: 0.03em; }
+
+  @keyframes fadeDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* === GLASS CARD === */
+  .glass-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 24px;
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    box-shadow:
+      0 8px 32px var(--glass-shadow),
+      inset 0 1px 0 var(--glass-shine),
+      inset 0 -1px 0 rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+  }
+  .glass-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glass-shine), transparent);
+  }
+
+  /* === INPUT PANEL === */
+  .input-panel {
+    width: 100%; max-width: 680px;
+    padding: 36px 40px;
+    animation: fadeUp 0.7s ease 0.1s both;
+  }
+
+  .panel-title {
+    font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--accent-b); margin-bottom: 24px; display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--glass-border), transparent); }
+
+  .fields-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;
+  }
+  .field-full { grid-column: 1 / -1; }
+
+  .field-group { display: flex; flex-direction: column; gap: 8px; }
+  label { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+
+  .glass-input {
+    width: 100%;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: var(--text-primary);
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(8px);
+  }
+  .glass-input::placeholder { color: rgba(255,255,255,0.25); }
+  .glass-input:focus {
+    border-color: var(--accent-a);
+    background: rgba(167,139,250,0.08);
+    box-shadow: 0 0 0 3px rgba(167,139,250,0.12), 0 0 20px rgba(167,139,250,0.08);
+  }
+  textarea.glass-input { resize: vertical; min-height: 80px; line-height: 1.6; }
+
+  /* Count selector */
+  .count-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .count-pill {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 100px; padding: 6px 16px;
+    font-size: 13px; cursor: pointer; transition: all 0.2s;
+    color: var(--text-muted);
+  }
+  .count-pill:hover { border-color: var(--accent-a); color: var(--text-primary); }
+  .count-pill.active {
+    background: rgba(167,139,250,0.18);
+    border-color: var(--accent-a);
+    color: var(--accent-a);
+    box-shadow: 0 0 12px rgba(167,139,250,0.2);
+  }
+
+  /* CTA Button */
+  .btn-generate {
+    width: 100%; margin-top: 24px;
+    padding: 15px 32px;
+    border-radius: 14px; border: none; cursor: pointer;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px; font-weight: 600; letter-spacing: 0.05em;
+    color: white;
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 50%, #0891b2 100%);
+    background-size: 200% 200%;
+    position: relative; overflow: hidden;
+    transition: all 0.3s ease;
+    animation: gradShift 4s ease infinite;
+  }
+  .btn-generate:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,58,237,0.4); }
+  .btn-generate:active { transform: translateY(0); }
+  .btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-generate::before {
+    content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    transition: left 0.5s;
+  }
+  .btn-generate:hover::before { left: 100%; }
+
+  @keyframes gradShift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* === LOADING === */
+  .loading-panel {
+    width: 100%; max-width: 680px;
+    padding: 48px;
+    text-align: center;
+    display: none;
+    animation: fadeUp 0.4s ease both;
+  }
+  .spinner {
+    width: 48px; height: 48px; margin: 0 auto 20px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.08);
+    border-top-color: var(--accent-a);
+    border-right-color: var(--accent-b);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { color: var(--text-muted); font-size: 14px; }
+  .loading-subtext { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 6px; }
+
+  /* === ASSESSMENT PANEL === */
+  .assessment-panel {
+    width: 100%; max-width: 760px;
+    display: none;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .assessment-header {
+    padding: 28px 36px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .breadcrumb {
+    display: flex; gap: 6px; align-items: center;
+    font-size: 11px; color: var(--text-muted); margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .breadcrumb span { color: var(--text-primary); background: rgba(255,255,255,0.07); padding: 2px 10px; border-radius: 100px; }
+  .breadcrumb-sep { opacity: 0.3; }
+  .assessment-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem; font-weight: 400; line-height: 1.3;
+  }
+  .meta-row {
+    margin-top: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .meta-chip {
+    font-size: 11px; padding: 3px 12px; border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text-muted); background: rgba(255,255,255,0.04);
+  }
+  .progress-wrap { flex: 1; min-width: 120px; }
+  .progress-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .progress-bar { height: 3px; background: rgba(255,255,255,0.08); border-radius: 100px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent-a), var(--accent-b)); border-radius: 100px; transition: width 0.5s ease; }
+
+  /* Questions */
+  .questions-list { padding: 24px 36px; display: flex; flex-direction: column; gap: 28px; }
+
+  .question-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; padding: 24px;
+    transition: border-color 0.3s;
+    position: relative; overflow: hidden;
+  }
+  .question-card.answered { border-color: rgba(167,139,250,0.25); }
+
+  .q-number {
+    font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase;
+    color: var(--accent-a); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .q-badge {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 600;
+  }
+  .q-text { font-size: 15px; line-height: 1.65; font-weight: 400; margin-bottom: 18px; }
+
+  .options-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .option-btn {
+    width: 100%; text-align: left; cursor: pointer;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px; padding: 13px 16px;
+    color: var(--text-primary);
+    font-family: 'Sora', sans-serif; font-size: 14px; line-height: 1.5;
+    transition: all 0.25s ease;
+    display: flex; align-items: flex-start; gap: 12px;
+    position: relative; overflow: hidden;
+  }
+  .option-btn:hover:not(:disabled) {
+    background: rgba(167,139,250,0.1);
+    border-color: rgba(167,139,250,0.3);
+    transform: translateX(3px);
+  }
+  .option-letter {
+    width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    transition: all 0.25s;
+  }
+  .option-btn:hover:not(:disabled) .option-letter {
+    background: rgba(167,139,250,0.2); border-color: var(--accent-a); color: var(--accent-a);
+  }
+
+  .option-btn.selected {
+    background: rgba(167,139,250,0.12); border-color: var(--accent-a);
+  }
+  .option-btn.selected .option-letter { background: var(--accent-a); color: white; border-color: var(--accent-a); }
+
+  .option-btn.correct {
+    background: rgba(74,222,128,0.1); border-color: var(--accent-correct);
+  }
+  .option-btn.correct .option-letter { background: var(--accent-correct); color: white; border-color: var(--accent-correct); }
+
+  .option-btn.wrong {
+    background: rgba(248,113,113,0.08); border-color: var(--accent-wrong);
+  }
+  .option-btn.wrong .option-letter { background: var(--accent-wrong); color: white; border-color: var(--accent-wrong); }
+
+  .option-btn:disabled { cursor: default; }
+
+  /* Explanation */
+  .explanation {
+    margin-top: 14px; padding: 14px 16px;
+    background: rgba(255,255,255,0.04);
+    border-left: 3px solid var(--accent-b);
+    border-radius: 0 10px 10px 0;
+    font-size: 13px; line-height: 1.65; color: rgba(255,255,255,0.75);
+    display: none;
+    animation: fadeUp 0.3s ease;
+  }
+  .explanation.show { display: block; }
+  .explanation strong { color: var(--accent-b); }
+
+  /* Score panel */
+  .score-panel {
+    margin: 0 36px 36px;
+    padding: 24px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 18px;
+    display: none;
+    text-align: center;
+    animation: fadeUp 0.5s ease both;
+  }
+  .score-big { font-family: 'DM Serif Display', serif; font-size: 3rem; font-weight: 400; }
+  .score-big span { background: linear-gradient(135deg, var(--accent-a), var(--accent-b)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .score-label { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+  .score-bars { display: flex; justify-content: center; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+  .score-bar-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .score-indicator { width: 12px; height: 12px; border-radius: 50%; }
+  .score-indicator.correct-ind { background: var(--accent-correct); }
+  .score-indicator.wrong-ind { background: var(--accent-wrong); }
+  .score-indicator.skip-ind { background: rgba(255,255,255,0.2); }
+  .score-bar-label { font-size: 10px; color: var(--text-muted); }
+
+  /* Reset button */
+  .btn-reset {
+    display: inline-flex; align-items: center; gap: 8px;
+    margin-top: 20px; padding: 10px 24px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 100px; cursor: pointer;
+    font-family: 'Sora', sans-serif; font-size: 13px; color: var(--text-primary);
+    transition: all 0.25s;
+  }
+  .btn-reset:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+
+  /* === UTILITIES === */
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  /* Error */
+  .error-toast {
+    width: 100%; max-width: 680px;
+    background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3);
+    border-radius: 14px; padding: 14px 20px;
+    font-size: 13px; color: #fca5a5;
+    display: none; margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+  }
+  .error-toast.show { display: block; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 100px; }
+
+  @media (max-width: 600px) {
+    .input-panel, .assessment-header, .questions-list, .score-panel { padding-left: 20px; padding-right: 20px; }
+    .fields-grid { grid-template-columns: 1fr; }
+    .score-panel { margin-left: 20px; margin-right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-canvas">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+  <div class="orb orb-4"></div>
+</div>
+<div class="bg-grid"></div>
+
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-badge"><div class="logo-dot"></div>AI-Powered Assessment</div>
+    <h1>AdaptAssess</h1>
+    <p class="subtitle">Intelligent question generation for any domain</p>
+  </header>
+
+  <!-- ERROR TOAST -->
+  <div class="error-toast" id="errorToast"></div>
+
+  <!-- INPUT PANEL -->
+  <div class="glass-card input-panel" id="inputPanel">
+    <div class="panel-title">Configure Assessment</div>
+
+    <div class="fields-grid">
+      <div class="field-group">
+        <label>Domain</label>
+        <input type="text" class="glass-input" id="domain" placeholder="e.g. Cognitive Psychology" />
+      </div>
+      <div class="field-group">
+        <label>Subdomain</label>
+        <input type="text" class="glass-input" id="subdomain" placeholder="e.g. Memory & Encoding" />
+      </div>
+      <div class="field-group field-full">
+        <label>Concept / Topic</label>
+        <textarea class="glass-input" id="concept" placeholder="e.g. Working memory capacity limits and the role of chunking in information retention…"></textarea>
+      </div>
+      <div class="field-group">
+        <label>Difficulty</label>
+        <select class="glass-input" id="difficulty">
+          <option value="introductory">Introductory</option>
+          <option value="intermediate" selected>Intermediate</option>
+          <option value="advanced">Advanced</option>
+          <option value="expert">Expert / Graduate</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Number of Questions</label>
+        <div class="count-group">
+          <button class="count-pill" data-n="3">3</button>
+          <button class="count-pill active" data-n="5">5</button>
+          <button class="count-pill" data-n="8">8</button>
+          <button class="count-pill" data-n="10">10</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-generate" id="generateBtn" onclick="generateAssessment()">
+      ✦ Generate Assessment
+    </button>
+  </div>
+
+  <!-- LOADING -->
+  <div class="glass-card loading-panel" id="loadingPanel">
+    <div class="spinner"></div>
+    <div class="loading-text">Generating your assessment…</div>
+    <div class="loading-subtext" id="loadingSubtext">Crafting questions tailored to your domain</div>
+  </div>
+
+  <!-- ASSESSMENT PANEL -->
+  <div class="glass-card assessment-panel" id="assessmentPanel">
+    <div class="assessment-header">
+      <div class="breadcrumb">
+        <span id="bcDomain">—</span>
+        <span class="breadcrumb-sep">›</span>
+        <span id="bcSubdomain">—</span>
+      </div>
+      <div class="assessment-title" id="assessTitle">Assessment</div>
+      <div class="meta-row">
+        <span class="meta-chip" id="metaDiff">Intermediate</span>
+        <span class="meta-chip" id="metaCount">5 questions</span>
+        <div class="progress-wrap">
+          <div class="progress-label">
+            <span>Progress</span>
+            <span id="progressText">0 / 5</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="questions-list" id="questionsList"></div>
+
+    <div class="score-panel" id="scorePanel">
+      <div class="score-big"><span id="scoreNum">0</span><span style="color:rgba(255,255,255,0.3); font-size:1.5rem"> / </span><span id="scoreTotal" style="color:rgba(255,255,255,0.5); font-size:1.8rem">5</span></div>
+      <div class="score-label" id="scoreLabel">Assessment complete</div>
+      <div class="score-bars" id="scoreBars"></div>
+      <button class="btn-reset" onclick="resetAll()">↩ New Assessment</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let currentN = 5;
+let answered = 0;
+let correct = 0;
+let totalQ = 0;
+let questionResults = [];
+
+// Count pills
+document.querySelectorAll('.count-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.count-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    currentN = parseInt(pill.dataset.n);
+  });
+});
+
+function showError(msg) {
+  const el = document.getElementById('errorToast');
+  el.textContent = '⚠ ' + msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 6000);
+}
+
+async function generateAssessment() {
+  const domain = document.getElementById('domain').value.trim();
+  const subdomain = document.getElementById('subdomain').value.trim();
+  const concept = document.getElementById('concept').value.trim();
+  const difficulty = document.getElementById('difficulty').value;
+
+  if (!domain || !subdomain || !concept) {
+    showError('Please fill in Domain, Subdomain, and Concept before generating.');
+    return;
+  }
+
+  // UI transitions
+  document.getElementById('generateBtn').disabled = true;
+  document.getElementById('inputPanel').style.display = 'none';
+  const loadingEl = document.getElementById('loadingPanel');
+  loadingEl.style.display = 'block';
+
+  const subtexts = [
+    'Analyzing domain knowledge structure…',
+    'Crafting distractors with pedagogical validity…',
+    'Calibrating difficulty to ' + difficulty + ' level…',
+    'Formulating answer explanations…',
+    'Finalizing question set…'
+  ];
+  let si = 0;
+  const subtextEl = document.getElementById('loadingSubtext');
+  const subtextInterval = setInterval(() => {
+    si = (si + 1) % subtexts.length;
+    subtextEl.textContent = subtexts[si];
+  }, 1800);
+
+  try {
+    const prompt = `You are an expert educational assessment designer with deep knowledge in ${domain}.
+
+Generate exactly ${currentN} multiple-choice questions for the following specification:
+
+- Domain: ${domain}
+- Subdomain: ${subdomain}
+- Concept/Topic: ${concept}
+- Difficulty: ${difficulty}
+
+Requirements:
+- Each question must be conceptually distinct and test different facets of the concept
+- Each question has exactly 4 options (A, B, C, D)
+- Distractors should reflect common misconceptions, not random noise
+- For expert/advanced levels, use scenario-based or application questions
+- Include a brief explanation (2–3 sentences) for the correct answer
+
+Respond ONLY with a valid JSON array. No markdown, no preamble. Format:
+[
+  {
+    "question": "Question text here?",
+    "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+    "correct": 0,
+    "explanation": "Why this answer is correct and others are not."
+  }
+]
+
+"correct" is the 0-indexed position of the correct option.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    clearInterval(subtextInterval);
+
+    if (data.error) throw new Error(data.error.message);
+
+    const raw = data.content.map(b => b.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const questions = JSON.parse(clean);
+
+    if (!Array.isArray(questions) || questions.length === 0) throw new Error('Invalid question format received.');
+
+    renderAssessment(questions, domain, subdomain, concept, difficulty);
+
+  } catch (err) {
+    clearInterval(subtextInterval);
+    loadingEl.style.display = 'none';
+    document.getElementById('inputPanel').style.display = 'block';
+    document.getElementById('generateBtn').disabled = false;
+    showError('Generation failed: ' + err.message);
+  }
+}
+
+function renderAssessment(questions, domain, subdomain, concept, difficulty) {
+  document.getElementById('loadingPanel').style.display = 'none';
+
+  answered = 0; correct = 0; totalQ = questions.length;
+  questionResults = new Array(totalQ).fill(null);
+
+  // Header
+  document.getElementById('bcDomain').textContent = domain;
+  document.getElementById('bcSubdomain').textContent = subdomain;
+  document.getElementById('assessTitle').textContent = concept.length > 60 ? concept.slice(0, 60) + '…' : concept;
+  document.getElementById('metaDiff').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+  document.getElementById('metaCount').textContent = totalQ + ' question' + (totalQ !== 1 ? 's' : '');
+  document.getElementById('progressText').textContent = '0 / ' + totalQ;
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('scoreTotal').textContent = totalQ;
+
+  const list = document.getElementById('questionsList');
+  list.innerHTML = '';
+
+  const letters = ['A', 'B', 'C', 'D'];
+
+  questions.forEach((q, qi) => {
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    card.id = 'qcard-' + qi;
+
+    const optionsHTML = q.options.map((opt, oi) => `
+      <button class="option-btn" id="opt-${qi}-${oi}" onclick="selectOption(${qi}, ${oi}, ${q.correct})">
+        <span class="option-letter">${letters[oi]}</span>
+        <span>${escapeHTML(opt)}</span>
+      </button>
+    `).join('');
+
+    card.innerHTML = `
+      <div class="q-number"><div class="q-badge">${qi + 1}</div>Question ${qi + 1}</div>
+      <div class="q-text">${escapeHTML(q.question)}</div>
+      <div class="options-list">${optionsHTML}</div>
+      <div class="explanation" id="exp-${qi}">
+        <strong>Explanation:</strong> ${escapeHTML(q.explanation || '')}
+      </div>
+    `;
+    list.appendChild(card);
+  });
+
+  document.getElementById('scorePanel').style.display = 'none';
+  document.getElementById('assessmentPanel').style.display = 'block';
+
+  // Scroll
+  setTimeout(() => document.getElementById('assessmentPanel').scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+}
+
+function selectOption(qi, selected, correctIdx) {
+  // Disable all buttons for this question
+  const letters = ['A','B','C','D'];
+  for (let i = 0; i < 4; i++) {
+    const btn = document.getElementById(`opt-${qi}-${i}`);
+    if (!btn) continue;
+    btn.disabled = true;
+    if (i === correctIdx) btn.classList.add('correct');
+    else if (i === selected && selected !== correctIdx) btn.classList.add('wrong');
+  }
+
+  // Show explanation
+  document.getElementById(`exp-${qi}`).classList.add('show');
+  document.getElementById(`qcard-${qi}`).classList.add('answered');
+
+  // Track
+  const wasCorrect = selected === correctIdx;
+  if (wasCorrect) correct++;
+  questionResults[qi] = wasCorrect;
+  answered++;
+
+  // Update progress
+  document.getElementById('progressText').textContent = answered + ' / ' + totalQ;
+  document.getElementById('progressFill').style.width = ((answered / totalQ) * 100) + '%';
+
+  // Show score when done
+  if (answered === totalQ) showScore();
+}
+
+function showScore() {
+  const panel = document.getElementById('scorePanel');
+  panel.style.display = 'block';
+
+  document.getElementById('scoreNum').textContent = correct;
+
+  const pct = Math.round((correct / totalQ) * 100);
+  let label = pct >= 90 ? '🏆 Excellent mastery!' : pct >= 70 ? '✓ Good understanding' : pct >= 50 ? '△ Developing — review the explanations' : '✗ Needs review — revisit core concepts';
+  document.getElementById('scoreLabel').textContent = label + ' (' + pct + '%)';
+
+  const bars = document.getElementById('scoreBars');
+  bars.innerHTML = questionResults.map((r, i) => `
+    <div class="score-bar-item">
+      <div class="score-indicator ${r === true ? 'correct-ind' : r === false ? 'wrong-ind' : 'skip-ind'}"></div>
+      <div class="score-bar-label">Q${i + 1}</div>
+    </div>
+  `).join('');
+
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 200);
+}
+
+function resetAll() {
+  document.getElementById('assessmentPanel').style.display = 'none';
+  document.getElementById('inputPanel').style.display = 'block';
+  document.getElementById('generateBtn').disabled = false;
+  document.getElementById('errorToast').classList.remove('show');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function escapeHTML(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
